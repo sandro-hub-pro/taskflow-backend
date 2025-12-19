@@ -1,5 +1,8 @@
 <?php
 
+// Parse allowed origins from environment variable (comma-separated)
+$allowedOrigins = array_filter(array_map('trim', explode(',', env('CORS_ALLOWED_ORIGINS', 'http://localhost:5173'))));
+
 return [
 
     /*
@@ -12,7 +15,7 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => [env('FRONTEND_URL', 'http://localhost:5173')],
+    'allowed_origins' => $allowedOrigins,
 
     'allowed_origins_patterns' => [],
 
