@@ -8,7 +8,6 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Facades\URL;
 
 class VerifyEmailNotification extends VerifyEmail implements ShouldQueue
 {
@@ -32,26 +31,16 @@ class VerifyEmailNotification extends VerifyEmail implements ShouldQueue
     protected function verificationUrl($notifiable): string
     {
         $frontendUrl = config('app.frontend_url', config('app.url'));
-        $appUrl = config('app.url');
         
-        // Generate the signed verification URL
-        $signedUrl = URL::temporarySignedRoute(
-            'verification.verify',
-            Carbon::now()->addMinutes(Config::get('auth.verification.expire', 60)),
-            [
-                'id' => $notifiable->getKey(),
-                'hash' => sha1($notifiable->getEmailForVerification()),
-            ]
-        );
+        $id = $notifiable->getKey();
+        $hash = sha1($notifiable->getEmailForVerification());
+        $expires = Carbon::now()->addMinutes(Config::get('auth.verification.expire', 60))->timestamp;
 
-        // If frontend URL is the same as app URL (Blade templates), use direct link
-        if ($frontendUrl === $appUrl) {
-            return $signedUrl;
-        }
-
-        // For SPA frontend, redirect to frontend with the signed URL as parameter
+        // For SPA frontend, build URL with verification params
         return $frontendUrl . '/verify-email?' . http_build_query([
-            'url' => $signedUrl,
+            'id' => $id,
+            'hash' => $hash,
+            'expires' => $expires,
         ]);
     }
 }

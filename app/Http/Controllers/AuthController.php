@@ -122,11 +122,25 @@ class AuthController extends Controller
      */
     public function verifyEmail(Request $request, int $id, string $hash): JsonResponse
     {
-        $user = User::findOrFail($id);
+        $user = User::find($id);
+
+        if (!$user) {
+            return response()->json([
+                'message' => 'Invalid verification link.',
+            ], 400);
+        }
 
         if (!hash_equals((string) $hash, sha1($user->getEmailForVerification()))) {
             return response()->json([
                 'message' => 'Invalid verification link.',
+            ], 400);
+        }
+
+        // Check expiration if provided
+        $expires = $request->query('expires');
+        if ($expires && now()->timestamp > (int) $expires) {
+            return response()->json([
+                'message' => 'Verification link has expired.',
             ], 400);
         }
 
