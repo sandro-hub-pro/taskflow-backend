@@ -52,6 +52,20 @@ class TaskController extends Controller
 
         $tasks = $query->latest()->paginate($request->per_page ?? 15);
 
+        // Transform tasks to include calculated progress
+        $tasks->getCollection()->transform(function ($task) use ($user) {
+            $taskArray = $task->toArray();
+            $taskArray['overall_progress'] = $task->calculated_progress;
+            
+            // Include user's individual progress if they are an assignee
+            $userAssignment = $task->assignees->firstWhere('id', $user->id);
+            if ($userAssignment) {
+                $taskArray['my_progress'] = $userAssignment->pivot->progress ?? 0;
+            }
+            
+            return $taskArray;
+        });
+
         return response()->json($tasks);
     }
 
@@ -130,7 +144,16 @@ class TaskController extends Controller
 
         $task->load(['creator', 'assignees', 'assigner', 'comments.user', 'project']);
 
-        return response()->json($task);
+        $response = $task->toArray();
+        $response['overall_progress'] = $task->calculated_progress;
+        
+        // Include user's individual progress if they are an assignee
+        $userAssignment = $task->assignees->firstWhere('id', $user->id);
+        if ($userAssignment) {
+            $response['my_progress'] = $userAssignment->pivot->progress ?? 0;
+        }
+
+        return response()->json($response);
     }
 
     /**
@@ -175,9 +198,28 @@ class TaskController extends Controller
 
         $validated = $request->validate($rules);
 
+        // Handle individual user progress update for assignees
+        if (isset($validated['progress']) && $isAssignee) {
+            // Update the user's individual progress in the pivot table
+            $task->assignees()->updateExistingPivot($user->id, [
+                'progress' => $validated['progress'],
+            ]);
+            
+            // Recalculate and store the overall progress
+            $task->refresh();
+            $overallProgress = $task->calculated_progress;
+            $validated['progress'] = $overallProgress;
+        }
+
         // Auto-update progress when status changes
         if (isset($validated['status'])) {
             if ($validated['status'] === 'completed') {
+                // When marked complete, set all assignees to 100%
+                if ($canFullEdit) {
+                    $task->assignees()->each(function ($assignee) use ($task) {
+                        $task->assignees()->updateExistingPivot($assignee->id, ['progress' => 100]);
+                    });
+                }
                 $validated['progress'] = 100;
             } elseif ($validated['status'] === 'pending' && !isset($validated['progress'])) {
                 $validated['progress'] = 0;
@@ -186,9 +228,19 @@ class TaskController extends Controller
 
         $task->update($validated);
 
+        $freshTask = $task->fresh()->load(['creator', 'assignees', 'assigner']);
+        
+        // Add the user's individual progress and overall progress to the response
+        $response = $freshTask->toArray();
+        $response['overall_progress'] = $freshTask->calculated_progress;
+        if ($isAssignee) {
+            $userAssignment = $freshTask->assignees->firstWhere('id', $user->id);
+            $response['my_progress'] = $userAssignment ? $userAssignment->pivot->progress : 0;
+        }
+
         return response()->json([
             'message' => 'Task updated successfully.',
-            'task' => $task->fresh()->load(['creator', 'assignees', 'assigner']),
+            'task' => $response,
         ]);
     }
 
@@ -288,6 +340,17 @@ class TaskController extends Controller
         }
 
         $tasks = $query->latest()->paginate($request->per_page ?? 15);
+
+        // Transform tasks to include calculated progress and user's individual progress
+        $tasks->getCollection()->transform(function ($task) use ($user) {
+            $taskArray = $task->toArray();
+            $taskArray['overall_progress'] = $task->calculated_progress;
+            
+            $userAssignment = $task->assignees->firstWhere('id', $user->id);
+            $taskArray['my_progress'] = $userAssignment ? $userAssignment->pivot->progress : 0;
+            
+            return $taskArray;
+        });
 
         return response()->json($tasks);
     }

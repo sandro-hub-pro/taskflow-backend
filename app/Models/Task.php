@@ -62,8 +62,30 @@ class Task extends Model
     public function assignees(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'task_assignments')
-            ->withPivot('assigned_by')
+            ->withPivot('assigned_by', 'progress')
             ->withTimestamps();
+    }
+
+    /**
+     * Get the calculated progress based on all assignees' contributions.
+     * Each assignee's progress is their portion (100 / assignee count).
+     */
+    public function getCalculatedProgressAttribute(): int
+    {
+        $assignees = $this->assignees;
+        
+        if ($assignees->isEmpty()) {
+            return $this->progress ?? 0;
+        }
+
+        $totalProgress = $assignees->sum(fn($assignee) => $assignee->pivot->progress ?? 0);
+        $assigneeCount = $assignees->count();
+        
+        // Each assignee contributes their progress divided by the number of assignees
+        // e.g., 3 assignees each at 30% = 30/3 + 30/3 + 30/3 = 30% total
+        // Or if we want additive: 3 assignees at 30%, 30%, 30% = 90% total (capped at 100)
+        // Going with additive approach as per user request
+        return min(100, (int) round($totalProgress / $assigneeCount));
     }
 
     /**

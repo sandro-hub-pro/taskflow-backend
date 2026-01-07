@@ -57,7 +57,12 @@ class DashboardController extends Controller
         $recentTasks = Task::with(['project', 'assignees'])
             ->latest()
             ->take(10)
-            ->get();
+            ->get()
+            ->map(function ($task) {
+                $taskArray = $task->toArray();
+                $taskArray['overall_progress'] = $task->calculated_progress;
+                return $taskArray;
+            });
 
         $usersByRole = User::selectRaw('role, count(*) as count')
             ->groupBy('role')
@@ -107,14 +112,24 @@ class DashboardController extends Controller
             ->with(['project', 'assignees'])
             ->latest()
             ->take(10)
-            ->get();
+            ->get()
+            ->map(function ($task) {
+                $taskArray = $task->toArray();
+                $taskArray['overall_progress'] = $task->calculated_progress;
+                return $taskArray;
+            });
 
         $overdueTasks = Task::whereIn('project_id', $projectIds)
             ->where('status', '!=', 'completed')
             ->whereNotNull('due_date')
             ->where('due_date', '<', now())
             ->with(['project', 'assignees'])
-            ->get();
+            ->get()
+            ->map(function ($task) {
+                $taskArray = $task->toArray();
+                $taskArray['overall_progress'] = $task->calculated_progress;
+                return $taskArray;
+            });
 
         return response()->json([
             'total_projects' => $totalProjects,
@@ -146,22 +161,43 @@ class DashboardController extends Controller
             ->where('status', '!=', 'completed')
             ->whereNotNull('due_date')
             ->orderBy('due_date')
-            ->with(['project'])
+            ->with(['project', 'assignees'])
             ->take(5)
-            ->get();
+            ->get()
+            ->map(function ($task) use ($user) {
+                $taskArray = $task->toArray();
+                $taskArray['overall_progress'] = $task->calculated_progress;
+                $userAssignment = $task->assignees->firstWhere('id', $user->id);
+                $taskArray['my_progress'] = $userAssignment ? $userAssignment->pivot->progress : 0;
+                return $taskArray;
+            });
 
         $overdueTasks = $user->assignedTasks()
             ->where('status', '!=', 'completed')
             ->whereNotNull('due_date')
             ->where('due_date', '<', now())
-            ->with(['project'])
-            ->get();
+            ->with(['project', 'assignees'])
+            ->get()
+            ->map(function ($task) use ($user) {
+                $taskArray = $task->toArray();
+                $taskArray['overall_progress'] = $task->calculated_progress;
+                $userAssignment = $task->assignees->firstWhere('id', $user->id);
+                $taskArray['my_progress'] = $userAssignment ? $userAssignment->pivot->progress : 0;
+                return $taskArray;
+            });
 
         $recentTasks = $user->assignedTasks()
-            ->with(['project'])
+            ->with(['project', 'assignees'])
             ->latest()
             ->take(10)
-            ->get();
+            ->get()
+            ->map(function ($task) use ($user) {
+                $taskArray = $task->toArray();
+                $taskArray['overall_progress'] = $task->calculated_progress;
+                $userAssignment = $task->assignees->firstWhere('id', $user->id);
+                $taskArray['my_progress'] = $userAssignment ? $userAssignment->pivot->progress : 0;
+                return $taskArray;
+            });
 
         return response()->json([
             'total_assigned_tasks' => $assignedTasks->count(),
