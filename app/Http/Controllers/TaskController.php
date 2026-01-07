@@ -218,9 +218,21 @@ class TaskController extends Controller
             // Update individual progress
             if (isset($validated['progress'])) {
                 $pivotUpdate['progress'] = $validated['progress'];
+                
+                // Auto-update individual status based on progress
+                if ($validated['progress'] >= 100) {
+                    $pivotUpdate['status'] = 'completed';
+                } elseif ($validated['progress'] > 0) {
+                    // Get current user's status
+                    $currentStatus = $task->assignees()->where('user_id', $user->id)->first()?->pivot?->status ?? 'pending';
+                    // Only change to in_progress if currently pending
+                    if ($currentStatus === 'pending') {
+                        $pivotUpdate['status'] = 'in_progress';
+                    }
+                }
             }
             
-            // Update individual status
+            // Update individual status (if explicitly set, override auto-status)
             if (isset($validated['status'])) {
                 $pivotUpdate['status'] = $validated['status'];
             }
@@ -242,6 +254,16 @@ class TaskController extends Controller
                 $pivotUpdate = [];
                 if (isset($validated['progress'])) {
                     $pivotUpdate['progress'] = $validated['progress'];
+                    
+                    // Auto-update individual status based on progress
+                    if ($validated['progress'] >= 100) {
+                        $pivotUpdate['status'] = 'completed';
+                    } elseif ($validated['progress'] > 0) {
+                        $currentStatus = $task->assignees()->where('user_id', $user->id)->first()?->pivot?->status ?? 'pending';
+                        if ($currentStatus === 'pending') {
+                            $pivotUpdate['status'] = 'in_progress';
+                        }
+                    }
                 }
                 if (isset($validated['status'])) {
                     $pivotUpdate['status'] = $validated['status'];
@@ -250,7 +272,6 @@ class TaskController extends Controller
                     $task->assignees()->updateExistingPivot($user->id, $pivotUpdate);
                     $task->refresh();
                     $validated['progress'] = $task->calculated_progress;
-                    // For managers, use the status they set (not calculated)
                 }
             }
             
