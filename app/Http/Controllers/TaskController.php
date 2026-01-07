@@ -198,9 +198,8 @@ class TaskController extends Controller
                 'due_date' => ['nullable', 'date'],
             ];
         } else {
-            // Assignees can only update progress and status
+            // Assignees can only update their own progress (not task status)
             $rules = [
-                'status' => ['sometimes', Rule::in(['pending', 'in_progress', 'under_review', 'completed'])],
                 'progress' => ['sometimes', 'integer', 'min:0', 'max:100'],
             ];
         }
@@ -208,30 +207,53 @@ class TaskController extends Controller
         $validated = $request->validate($rules);
 
         // Handle individual user progress update for assignees
-        if (isset($validated['progress']) && $isAssignee) {
+        if (isset($validated['progress']) && $isAssignee && !$canFullEdit) {
             // Update the user's individual progress in the pivot table
             $task->assignees()->updateExistingPivot($user->id, [
                 'progress' => $validated['progress'],
             ]);
             
-            // Recalculate and store the overall progress
+            // Recalculate overall progress
             $task->refresh();
             $overallProgress = $task->calculated_progress;
             $validated['progress'] = $overallProgress;
+            
+            // Auto-update task status based on overall team progress
+            // Only mark as "completed" when ALL assignees are at 100%
+            $allAssigneesComplete = $task->assignees->every(fn($a) => ($a->pivot->progress ?? 0) >= 100);
+            
+            if ($allAssigneesComplete) {
+                $validated['status'] = 'completed';
+            } elseif ($overallProgress > 0 && $task->status === 'pending') {
+                $validated['status'] = 'in_progress';
+            } elseif ($overallProgress < 100 && $task->status === 'completed') {
+                // If task was completed but progress dropped, set back to in_progress
+                $validated['status'] = 'in_progress';
+            }
         }
 
-        // Auto-update progress when status changes
-        if (isset($validated['status'])) {
-            if ($validated['status'] === 'completed') {
-                // When marked complete, set all assignees to 100%
-                if ($canFullEdit) {
+        // Handle manager/admin updates
+        if ($canFullEdit) {
+            // Handle individual user progress update if also an assignee
+            if (isset($validated['progress']) && $isAssignee) {
+                $task->assignees()->updateExistingPivot($user->id, [
+                    'progress' => $validated['progress'],
+                ]);
+                $task->refresh();
+                $validated['progress'] = $task->calculated_progress;
+            }
+            
+            // Auto-update progress when status changes
+            if (isset($validated['status'])) {
+                if ($validated['status'] === 'completed') {
+                    // When marked complete by manager, set all assignees to 100%
                     $task->assignees()->each(function ($assignee) use ($task) {
                         $task->assignees()->updateExistingPivot($assignee->id, ['progress' => 100]);
                     });
+                    $validated['progress'] = 100;
+                } elseif ($validated['status'] === 'pending' && !isset($validated['progress'])) {
+                    $validated['progress'] = 0;
                 }
-                $validated['progress'] = 100;
-            } elseif ($validated['status'] === 'pending' && !isset($validated['progress'])) {
-                $validated['progress'] = 0;
             }
         }
 
