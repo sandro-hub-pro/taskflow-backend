@@ -56,12 +56,33 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
+     * The accessors to append to the model's array form.
+     */
+    protected $appends = ['name', 'full_name', 'avatar'];
+
+    /**
      * Get the user's full name.
      */
     public function getFullNameAttribute(): string
     {
         $middleName = $this->middle_name ? " {$this->middle_name}" : '';
         return "{$this->first_name}{$middleName} {$this->last_name}";
+    }
+
+    /**
+     * Get the user's name (alias for full_name).
+     */
+    public function getNameAttribute(): string
+    {
+        return $this->full_name;
+    }
+
+    /**
+     * Get the user's avatar (alias for profile_picture).
+     */
+    public function getAvatarAttribute(): ?string
+    {
+        return $this->profile_picture;
     }
 
     /**
