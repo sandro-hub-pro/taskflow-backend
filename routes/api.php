@@ -54,6 +54,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/my-tasks', [TaskController::class, 'myTasks']);
     Route::apiResource('projects.tasks', TaskController::class);
     Route::put('/projects/{project}/tasks/{task}/assign', [TaskController::class, 'assignUsers']);
+    Route::post('/projects/{project}/tasks/{task}/accept', [TaskController::class, 'accept']);
     Route::post('/projects/{project}/tasks/{task}/comments', [TaskController::class, 'addComment']);
     Route::delete('/projects/{project}/tasks/{task}/comments/{comment}', [TaskController::class, 'deleteComment']);
 });

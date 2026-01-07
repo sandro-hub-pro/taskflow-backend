@@ -22,7 +22,7 @@ class TaskController extends Controller
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 
-        $query = $project->tasks()->with(['creator', 'assignees', 'assigner']);
+        $query = $project->tasks()->with(['creator', 'assignees', 'assigner', 'accepter']);
 
         // Search
         if ($request->has('search')) {
@@ -52,10 +52,11 @@ class TaskController extends Controller
 
         $tasks = $query->latest()->paginate($request->per_page ?? 15);
 
-        // Transform tasks to include calculated progress
+        // Transform tasks to include calculated progress and acceptance info
         $tasks->getCollection()->transform(function ($task) use ($user) {
             $taskArray = $task->toArray();
             $taskArray['overall_progress'] = $task->calculated_progress;
+            $taskArray['is_accepted'] = $task->is_accepted;
             
             // Include user's individual progress if they are an assignee
             $userAssignment = $task->assignees->firstWhere('id', $user->id);
@@ -142,10 +143,11 @@ class TaskController extends Controller
             return response()->json(['message' => 'Task not found in this project.'], 404);
         }
 
-        $task->load(['creator', 'assignees', 'assigner', 'comments.user', 'project']);
+        $task->load(['creator', 'assignees', 'assigner', 'accepter', 'comments.user', 'project']);
 
         $response = $task->toArray();
         $response['overall_progress'] = $task->calculated_progress;
+        $response['is_accepted'] = $task->is_accepted;
         
         // Include user's individual progress if they are an assignee
         $userAssignment = $task->assignees->firstWhere('id', $user->id);
@@ -175,6 +177,13 @@ class TaskController extends Controller
 
         if (!$canFullEdit && !$isAssignee) {
             return response()->json(['message' => 'Unauthorized.'], 403);
+        }
+
+        // Prevent progress updates on accepted tasks (for non-admin/non-incharge users)
+        if ($task->is_accepted && !$canFullEdit) {
+            return response()->json([
+                'message' => 'This task has been accepted and can no longer be modified.',
+            ], 403);
         }
 
         $rules = [];
@@ -228,11 +237,12 @@ class TaskController extends Controller
 
         $task->update($validated);
 
-        $freshTask = $task->fresh()->load(['creator', 'assignees', 'assigner']);
+        $freshTask = $task->fresh()->load(['creator', 'assignees', 'assigner', 'accepter']);
         
         // Add the user's individual progress and overall progress to the response
         $response = $freshTask->toArray();
         $response['overall_progress'] = $freshTask->calculated_progress;
+        $response['is_accepted'] = $freshTask->is_accepted;
         if ($isAssignee) {
             $userAssignment = $freshTask->assignees->firstWhere('id', $user->id);
             $response['my_progress'] = $userAssignment ? $userAssignment->pivot->progress : 0;
@@ -240,6 +250,53 @@ class TaskController extends Controller
 
         return response()->json([
             'message' => 'Task updated successfully.',
+            'task' => $response,
+        ]);
+    }
+
+    /**
+     * Accept a completed task (only for admin/incharge).
+     */
+    public function accept(Request $request, Project $project, Task $task): JsonResponse
+    {
+        $user = $request->user();
+
+        if ($task->project_id !== $project->id) {
+            return response()->json(['message' => 'Task not found in this project.'], 404);
+        }
+
+        // Only admin or project incharge can accept tasks
+        if (!$user->isAdmin() && !$user->isProjectIncharge($project->id)) {
+            return response()->json(['message' => 'Unauthorized.'], 403);
+        }
+
+        // Task must be completed to be accepted
+        if ($task->status !== 'completed') {
+            return response()->json([
+                'message' => 'Only completed tasks can be accepted.',
+            ], 422);
+        }
+
+        // Task must not already be accepted
+        if ($task->is_accepted) {
+            return response()->json([
+                'message' => 'This task has already been accepted.',
+            ], 422);
+        }
+
+        $task->update([
+            'accepted_at' => now(),
+            'accepted_by' => $user->id,
+        ]);
+
+        $freshTask = $task->fresh()->load(['creator', 'assignees', 'assigner', 'accepter']);
+        
+        $response = $freshTask->toArray();
+        $response['overall_progress'] = $freshTask->calculated_progress;
+        $response['is_accepted'] = true;
+
+        return response()->json([
+            'message' => 'Task accepted successfully.',
             'task' => $response,
         ]);
     }
@@ -322,7 +379,7 @@ class TaskController extends Controller
 
         $query = Task::whereHas('assignees', function ($q) use ($user) {
             $q->where('user_id', $user->id);
-        })->with(['project', 'creator', 'assignees', 'assigner']);
+        })->with(['project', 'creator', 'assignees', 'assigner', 'accepter']);
 
         // Filter by status
         if ($request->has('status')) {
@@ -345,6 +402,7 @@ class TaskController extends Controller
         $tasks->getCollection()->transform(function ($task) use ($user) {
             $taskArray = $task->toArray();
             $taskArray['overall_progress'] = $task->calculated_progress;
+            $taskArray['is_accepted'] = $task->is_accepted;
             
             $userAssignment = $task->assignees->firstWhere('id', $user->id);
             $taskArray['my_progress'] = $userAssignment ? $userAssignment->pivot->progress : 0;

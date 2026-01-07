@@ -22,6 +22,8 @@ class Task extends Model
         'due_date',
         'created_by',
         'assigned_by',
+        'accepted_at',
+        'accepted_by',
     ];
 
     protected function casts(): array
@@ -29,6 +31,7 @@ class Task extends Model
         return [
             'due_date' => 'date',
             'progress' => 'integer',
+            'accepted_at' => 'datetime',
         ];
     }
 
@@ -54,6 +57,22 @@ class Task extends Model
     public function assigner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_by');
+    }
+
+    /**
+     * User who accepted the completed task.
+     */
+    public function accepter(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'accepted_by');
+    }
+
+    /**
+     * Check if task has been accepted by incharge.
+     */
+    public function getIsAcceptedAttribute(): bool
+    {
+        return $this->accepted_at !== null;
     }
 
     /**
