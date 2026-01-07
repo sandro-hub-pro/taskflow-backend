@@ -71,7 +71,7 @@ class UserController extends Controller
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
             'password' => ['required', Password::defaults()],
             'role' => ['required', Rule::in(['superadmin', 'admin', 'incharge', 'user'])],
-            'profile_picture' => ['nullable', 'image', 'max:2048'],
+            'profile_picture' => ['nullable', 'image', 'max:10240'],
         ]);
 
         if ($request->hasFile('profile_picture')) {
@@ -117,7 +117,7 @@ class UserController extends Controller
             'email' => ['sometimes', 'string', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
             'password' => ['nullable', Password::defaults()],
             'role' => ['sometimes', Rule::in(['superadmin', 'admin', 'incharge', 'user'])],
-            'profile_picture' => ['nullable', 'image', 'max:2048'],
+            'profile_picture' => ['nullable', 'image', 'max:10240'],
         ]);
 
         if ($request->hasFile('profile_picture')) {

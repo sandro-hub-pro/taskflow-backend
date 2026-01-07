@@ -52,7 +52,7 @@ class ProfileController extends Controller
     public function updatePicture(Request $request): RedirectResponse
     {
         $request->validate([
-            'profile_picture' => ['required', 'image', 'max:2048'],
+            'profile_picture' => ['required', 'image', 'max:10240'],
         ]);
 
         $user = $request->user();

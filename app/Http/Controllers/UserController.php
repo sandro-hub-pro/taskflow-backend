@@ -53,7 +53,7 @@ class UserController extends Controller
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique(User::class)],
             'password' => ['required', Password::defaults()],
             'role' => ['required', Rule::in(['admin', 'incharge', 'user'])],
-            'profile_picture' => ['nullable', 'image', 'max:2048'],
+            'profile_picture' => ['nullable', 'image', 'max:10240'],
         ]);
 
         if ($request->hasFile('profile_picture')) {
@@ -94,7 +94,7 @@ class UserController extends Controller
             'email' => ['sometimes', 'string', 'email', 'max:255', Rule::unique(User::class)->ignore($user->id)],
             'password' => ['sometimes', Password::defaults()],
             'role' => ['sometimes', Rule::in(['admin', 'incharge', 'user'])],
-            'profile_picture' => ['nullable', 'image', 'max:2048'],
+            'profile_picture' => ['nullable', 'image', 'max:10240'],
         ]);
 
         if ($request->hasFile('profile_picture')) {
@@ -140,7 +140,7 @@ class UserController extends Controller
     public function updateProfilePicture(Request $request): JsonResponse
     {
         $request->validate([
-            'profile_picture' => ['required', 'image', 'max:2048'],
+            'profile_picture' => ['required', 'image', 'max:10240'],
         ]);
 
         $user = $request->user();
