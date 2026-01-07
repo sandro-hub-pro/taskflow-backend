@@ -81,7 +81,7 @@ class Task extends Model
     public function assignees(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'task_assignments')
-            ->withPivot('assigned_by', 'progress')
+            ->withPivot('assigned_by', 'progress', 'status')
             ->withTimestamps();
     }
 
@@ -101,10 +101,34 @@ class Task extends Model
         $assigneeCount = $assignees->count();
         
         // Each assignee contributes their progress divided by the number of assignees
-        // e.g., 3 assignees each at 30% = 30/3 + 30/3 + 30/3 = 30% total
-        // Or if we want additive: 3 assignees at 30%, 30%, 30% = 90% total (capped at 100)
-        // Going with additive approach as per user request
         return min(100, (int) round($totalProgress / $assigneeCount));
+    }
+
+    /**
+     * Get the calculated overall status based on all assignees' individual statuses.
+     * Task is "completed" only when ALL assignees have status "completed".
+     */
+    public function getCalculatedStatusAttribute(): string
+    {
+        $assignees = $this->assignees;
+        
+        if ($assignees->isEmpty()) {
+            return $this->status ?? 'pending';
+        }
+
+        $allCompleted = $assignees->every(fn($a) => ($a->pivot->status ?? 'pending') === 'completed');
+        if ($allCompleted) {
+            return 'completed';
+        }
+
+        $anyInProgress = $assignees->contains(fn($a) => 
+            in_array($a->pivot->status ?? 'pending', ['in_progress', 'under_review', 'completed'])
+        );
+        if ($anyInProgress) {
+            return 'in_progress';
+        }
+
+        return 'pending';
     }
 
     /**
