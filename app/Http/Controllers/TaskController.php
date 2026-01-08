@@ -35,7 +35,18 @@ class TaskController extends Controller
 
         // Filter by status
         if ($request->has('status')) {
-            $query->where('status', $request->status);
+            $status = $request->status;
+            if ($status === 'overdue') {
+                // Overdue: due_date < today AND status is not completed/cancelled
+                $query->whereNotNull('due_date')
+                    ->where('due_date', '<', now()->startOfDay())
+                    ->whereNotIn('status', ['completed', 'cancelled']);
+            } elseif ($status === 'accepted') {
+                // Accepted: accepted_at is not null
+                $query->whereNotNull('accepted_at');
+            } else {
+                $query->where('status', $status);
+            }
         }
 
         // Filter by priority
@@ -456,7 +467,18 @@ class TaskController extends Controller
 
         // Filter by status
         if ($request->has('status')) {
-            $query->where('status', $request->status);
+            $status = $request->status;
+            if ($status === 'overdue') {
+                // Overdue: due_date < today AND status is not completed/cancelled
+                $query->whereNotNull('due_date')
+                    ->where('due_date', '<', now()->startOfDay())
+                    ->whereNotIn('status', ['completed', 'cancelled']);
+            } elseif ($status === 'accepted') {
+                // Accepted: accepted_at is not null
+                $query->whereNotNull('accepted_at');
+            } else {
+                $query->where('status', $status);
+            }
         }
 
         // Filter by priority
