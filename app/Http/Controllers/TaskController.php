@@ -50,7 +50,16 @@ class TaskController extends Controller
             });
         }
 
-        $tasks = $query->latest()->paginate($request->per_page ?? 15);
+        // Sort by status order: pending, in_progress, under_review, completed, cancelled
+        $query->orderByRaw("CASE 
+            WHEN status = 'pending' THEN 1 
+            WHEN status = 'in_progress' THEN 2 
+            WHEN status = 'under_review' THEN 3 
+            WHEN status = 'completed' THEN 4 
+            WHEN status = 'cancelled' THEN 5 
+            ELSE 6 END");
+
+        $tasks = $query->paginate($request->per_page ?? 15);
 
         // Transform tasks to include calculated progress/status and acceptance info
         $tasks->getCollection()->transform(function ($task) use ($user) {
@@ -460,7 +469,16 @@ class TaskController extends Controller
             $query->where('project_id', $request->project_id);
         }
 
-        $tasks = $query->latest()->paginate($request->per_page ?? 15);
+        // Sort by status order: pending, in_progress, under_review, completed, cancelled
+        $query->orderByRaw("CASE 
+            WHEN status = 'pending' THEN 1 
+            WHEN status = 'in_progress' THEN 2 
+            WHEN status = 'under_review' THEN 3 
+            WHEN status = 'completed' THEN 4 
+            WHEN status = 'cancelled' THEN 5 
+            ELSE 6 END");
+
+        $tasks = $query->paginate($request->per_page ?? 15);
 
         // Transform tasks to include calculated progress/status and user's individual progress/status
         $tasks->getCollection()->transform(function ($task) use ($user) {
