@@ -203,15 +203,15 @@ class TaskController extends Controller
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 
-        // Prevent progress updates on accepted tasks (for non-admin/non-incharge users)
-        if ($task->is_accepted && !$canFullEdit) {
+        // Prevent ALL users (including incharge) from editing accepted tasks
+        if ($task->is_accepted) {
             return response()->json([
                 'message' => 'This task has been accepted and can no longer be modified.',
             ], 403);
         }
 
-        // Prevent progress updates on cancelled tasks (for non-admin/non-incharge users)
-        if ($task->status === 'cancelled' && !$canFullEdit) {
+        // Prevent ALL users (including incharge) from editing cancelled tasks
+        if ($task->status === 'cancelled') {
             return response()->json([
                 'message' => 'This task has been cancelled and can no longer be modified.',
             ], 403);
@@ -266,6 +266,11 @@ class TaskController extends Controller
             // Update individual status (if explicitly set, override auto-status)
             if (isset($validated['status'])) {
                 $pivotUpdate['status'] = $validated['status'];
+                
+                // If status is set to pending, automatically set progress to 0
+                if ($validated['status'] === 'pending') {
+                    $pivotUpdate['progress'] = 0;
+                }
             }
             
             if (!empty($pivotUpdate)) {
@@ -304,6 +309,11 @@ class TaskController extends Controller
                 }
                 if (isset($validated['status'])) {
                     $pivotUpdate['status'] = $validated['status'];
+                    
+                    // If status is set to pending, automatically set progress to 0
+                    if ($validated['status'] === 'pending') {
+                        $pivotUpdate['progress'] = 0;
+                    }
                 }
                 if (!empty($pivotUpdate)) {
                     $task->assignees()->updateExistingPivot($user->id, $pivotUpdate);
