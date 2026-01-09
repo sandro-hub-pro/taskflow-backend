@@ -22,7 +22,7 @@ class TaskController extends Controller
             return response()->json(['message' => 'Unauthorized.'], 403);
         }
 
-        $query = $project->tasks()->with(['creator', 'assignees', 'assigner', 'accepter']);
+        $query = $project->tasks()->with(['creator', 'assignees', 'assigner', 'accepter', 'comments.user']);
 
         // Search
         if ($request->has('search')) {
@@ -146,7 +146,7 @@ class TaskController extends Controller
 
         return response()->json([
             'message' => 'Task created successfully.',
-            'task' => $task->load(['creator', 'assignees', 'assigner']),
+            'task' => $task->load(['creator', 'assignees', 'assigner', 'comments.user']),
         ], 201);
     }
 
@@ -207,6 +207,13 @@ class TaskController extends Controller
         if ($task->is_accepted && !$canFullEdit) {
             return response()->json([
                 'message' => 'This task has been accepted and can no longer be modified.',
+            ], 403);
+        }
+
+        // Prevent progress updates on cancelled tasks (for non-admin/non-incharge users)
+        if ($task->status === 'cancelled' && !$canFullEdit) {
+            return response()->json([
+                'message' => 'This task has been cancelled and can no longer be modified.',
             ], 403);
         }
 
@@ -319,7 +326,7 @@ class TaskController extends Controller
 
         $task->update($validated);
 
-        $freshTask = $task->fresh()->load(['creator', 'assignees', 'assigner', 'accepter']);
+        $freshTask = $task->fresh()->load(['creator', 'assignees', 'assigner', 'accepter', 'comments.user']);
         
         // Add the user's individual progress/status and overall progress/status to the response
         $response = $freshTask->toArray();
@@ -373,7 +380,7 @@ class TaskController extends Controller
             'accepted_by' => $user->id,
         ]);
 
-        $freshTask = $task->fresh()->load(['creator', 'assignees', 'assigner', 'accepter']);
+        $freshTask = $task->fresh()->load(['creator', 'assignees', 'assigner', 'accepter', 'comments.user']);
         
         $response = $freshTask->toArray();
         $response['overall_progress'] = $freshTask->calculated_progress;
@@ -450,7 +457,7 @@ class TaskController extends Controller
 
         return response()->json([
             'message' => 'Users assigned successfully.',
-            'task' => $task->fresh()->load(['creator', 'assignees', 'assigner']),
+            'task' => $task->fresh()->load(['creator', 'assignees', 'assigner', 'comments.user']),
         ]);
     }
 
@@ -463,7 +470,7 @@ class TaskController extends Controller
 
         $query = Task::whereHas('assignees', function ($q) use ($user) {
             $q->where('user_id', $user->id);
-        })->with(['project', 'creator', 'assignees', 'assigner', 'accepter']);
+        })->with(['project', 'creator', 'assignees', 'assigner', 'accepter', 'comments.user']);
 
         // Filter by status
         if ($request->has('status')) {
